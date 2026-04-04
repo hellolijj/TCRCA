@@ -62,6 +62,19 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### Dependencies
+
+TCRCA requires the following dependencies:
+
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| numpy | >=1.21.0 | Numerical computing |
+| pandas | >=1.3.0 | Data manipulation |
+| networkx | >=2.6.0 | Graph operations |
+| torch | >=1.9.0 | Deep learning framework |
+| pytest | >=6.0.0 | Testing framework |
+| matplotlib | >=3.5.0 | Visualization (optional) |
+
 ---
 
 ## Datasets
@@ -99,47 +112,56 @@ Both datasets use the same multi-modal layout. Place exports under:
 
 ---
 
-## Evaluation metrics
+## Evaluation Metrics
 
-Reporting follows **Section V** of the paper.
+### Localization Metrics
 
-### Localization
+TCRCA reports standard root cause localization metrics:
 
-- **A@k (Top-k accuracy):** fraction of fault cases where the ground-truth root service appears in the model’s top-*k* ranked candidates.
-- **Avg@5:** average of **A@1 … A@5**, as in the paper (Eq. (41) with *k* = 5).
-- **MRR:** mean reciprocal rank of the true root in the ranked list.
+| Metric | Description | Formula |
+|--------|-------------|---------|
+| **A@k** (Top-k accuracy) | Fraction of fault cases where ground-truth root service appears in top-*k* candidates | Eq. (40) |
+| **Avg@5** | Average of A@1 through A@5 | Eq. (41) with *k* = 5 |
+| **MRR** | Mean reciprocal rank of true root in ranked list | — |
 
-**Ranking rule (aligned with Eq. (32)–(33)):** candidates are ordered by **RScore on the FPG node set *V′*** (descending). If the true root is not in *V′*, the rank is treated as missing and contributes **0** to MRR / A@k, consistent with strict evaluation on the FPG candidate set.
+**Ranking Rule:** Candidates are ordered by RScore on the FPG node set *V′* (descending). If the true root is not in *V′*, it contributes 0 to MRR/A@k (strict evaluation on FPG candidate set).
 
-The CLI summary prints **`A@1`, `A@3`, `A@5`, `Avg@5`, `MRR`**. Aliases `hit@1` / `hit@3` / `hit@5` duplicate **A@*** for backward compatibility.
+The CLI outputs: `A@1`, `A@3`, `A@5`, `Avg@5`, `MRR` (with `hit@1/3/5` aliases for backward compatibility).
 
-### FPG / alert-style diagnostics
+### FPG / Alert-style Diagnostics
 
-Per trace, the runner logs proxies comparable to Table VI:
+Per-trace diagnostics comparable to Table VI in the paper:
 
-| Symbol (paper) | Implemented quantity |
-|----------------|----------------------|
-| Avg. Alerts | `n_raw_alerts`: count of services with node anomaly score *sᵢ* > *τ* (fallback: argmax if none exceed *τ*) |
-| Avg. Chains | `n_compact_paths`: number of **A-CPS** paths returned |
-| Compression (%) | `(n_raw_alerts − n_compact_paths) / n_raw_alerts × 100` |
-| Top-3 Cov. (%) | `top3_path_coverage_pct`: share of anomalous services that appear on at least one of the **top-3** paths by path score |
+| Metric | Implementation | Description |
+|--------|----------------|-------------|
+| **Avg. Alerts** | `n_raw_alerts` | Count of services with anomaly score *sᵢ* > *τ* (fallback: argmax) |
+| **Avg. Chains** | `n_compact_paths` | Number of A-CPS paths returned |
+| **Compression (%)** | `(n_raw_alerts − n_compact_paths) / n_raw_alerts × 100` | Alert reduction ratio |
+| **Top-3 Cov. (%)** | `top3_path_coverage_pct` | Anomalous services on top-3 paths by path score |
 
 Batch means are reported as `mean_n_raw_alerts`, `mean_compression_pct`, `mean_top3_path_coverage_pct`, etc.
 
-### Optional
+### Optional Metrics
 
-- **Edge Jaccard / F1** vs. `ground_truth_edges` in the manifest (path reconstruction studies).
-- **Trace-level alert confusion** if the manifest includes `is_faulty_trace` and `trace_anomaly_threshold` (Task 1, Eq. (4)).
+- **Edge Jaccard / F1** — vs. `ground_truth_edges` in manifest (path reconstruction studies)
+- **Trace-level alert confusion** — if manifest includes `is_faulty_trace` and `trace_anomaly_threshold` (Task 1, Eq. (4))
 
-### Training vs. evaluation
+### Training vs Evaluation Protocol
 
-The paper trains on **normal** multimodal graphs with the **unsupervised** reconstruction loss (Eq. (21)); **root-cause labels are evaluation-only**. The bundled `run_evaluation.py` currently **fits per manifest row** on the corresponding trace window for convenience; for strict reproduction of the paper protocol, use **normal-trace pre-training** and **frozen inference** on fault traces (see comments in `tcrca/eval/runner.py`).
+The paper uses **unsupervised training** on normal multimodal graphs (reconstruction loss, Eq. (21)), with root-cause labels used **only for evaluation**.
+
+The bundled `run_evaluation.py` fits per manifest row on the corresponding trace window for convenience. For strict paper protocol:
+1. Pre-train on normal traces
+2. Use frozen inference on fault traces
+3. See comments in [`tcrca/eval/runner.py`](tcrca/eval/runner.py) for details
 
 ---
 
-## Quick start
+## Quick Start
 
-### Single run (dominant `trace_id` in tables)
+### Single Run
+
+Run the default example (dominant `trace_id` in tables):
 
 ```bash
 python main.py
@@ -147,7 +169,9 @@ python main.py
 
 Uses `datasets/train_ticket` via `TrainTicketDataSource` (adjust path in `main.py` if needed).
 
-### Batch evaluation (JSONL manifest)
+### Batch Evaluation
+
+Evaluate using a JSONL manifest:
 
 **Train Ticket:**
 
@@ -168,7 +192,9 @@ python experiments/run_evaluation.py ^
   --epochs 40
 ```
 
-Summary JSON includes **A@k**, **Avg@5**, **MRR**, and Table VI–style means; per-case lines are written to `*.per_case.jsonl`.
+Output includes:
+- Summary JSON with A@k, Avg@5, MRR, and Table VI–style means
+- Per-case lines written to `*.per_case.jsonl`
 
 ### Python API
 
@@ -185,21 +211,48 @@ out = run_tcrca_from_tables(data, cfg, train_epochs=40)
 print(out.trace_anomaly, out.fpg.top_roots, out.fpg.acps_paths)
 ```
 
-Hyperparameters match the paper’s notation where possible (`lambda_structure` = *λₛ*, `tau_anomaly` = *τ*, …); see `tcrca/config.py`.
+Hyperparameters match the paper's notation where possible (`lambda_structure` = *λₛ*, `tau_anomaly` = *τ*, …); see [`tcrca/config.py`](tcrca/config.py).
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
-tcrca/
-  data/sources.py       # Train Ticket, AIOps Live, Hipo-style loaders
-  eval/metrics.py       # A@k, Avg@k, Table VI–style stats, path metrics
-  eval/runner.py        # Manifest evaluation
-  pipeline.py           # End-to-end TCRCA
-  ...
-experiments/run_evaluation.py
-tests/
+TRCRA/
+├── tcrca/               # Core implementation
+│   ├── data/            # Data loading and preprocessing
+│   │   ├── __init__.py  # Package initialization
+│   │   └── sources.py   # Data source implementations (Train Ticket, AIOps Live)
+│   ├── eval/            # Evaluation utilities
+│   │   ├── __init__.py  # Package initialization
+│   │   ├── metrics.py   # Evaluation metrics (A@k, Avg@k, MRR, etc.)
+│   │   └── runner.py    # Manifest-based evaluation runner
+│   ├── __init__.py      # Package initialization
+│   ├── config.py        # Configuration settings and hyperparameters
+│   ├── embeddings.py    # Service embedding utilities
+│   ├── fpg.py           # Failure Propagation Graph construction
+│   ├── gae.py           # Graph Autoencoder for anomaly detection
+│   ├── gat.py           # Graph Attention Network for node embeddings
+│   ├── mscg.py          # Multi-modal Service Call Graph construction
+│   ├── mstgi.py         # Multi-scale Topology-Guided Inference
+│   ├── pipeline.py      # End-to-end TCRCA pipeline
+│   └── tensorize.py     # Data tensorization utilities
+├── experiments/         # Experimental scripts
+│   ├── eval_manifest.example.jsonl  # Example evaluation manifest
+│   └── run_evaluation.py            # Batch evaluation script
+├── figure/              # Visualization scripts
+│   ├── case.py          # Case study visualization
+│   ├── windows1.py      # Window analysis visualization
+│   └── windows2.py      # Additional window analysis
+├── img/                 # Images and diagrams
+│   └── architecutre.png # System architecture diagram
+├── tests/               # Test suite
+│   ├── test_eval_metrics.py      # Tests for evaluation metrics
+│   └── test_tcrca_pipeline.py    # Tests for TCRCA pipeline
+├── .gitignore           # Git ignore rules
+├── README.md            # Project documentation
+├── main.py              # Main entry point
+└── trace_graph.html     # Trace graph visualization
 ```
 
 ---
@@ -229,11 +282,11 @@ If you use this code, please cite the TCRCA paper (use the final venue/year from
 
 ## Contact
 
-- Junjun Li: [lijunjun@whu.edu.cn](mailto:lijunjun@whu.edu.cn)  
-- Shi Ying (corresponding): [yingshi@whu.edu.cn](mailto:yingshi@whu.edu.cn)  
-- Institution: School of Computer Science, Wuhan University, China  
+- **Junjun Li:** [lijunjun@whu.edu.cn](mailto:lijunjun@whu.edu.cn)
+- **Shi Ying** (corresponding): [yingshi@whu.edu.cn](mailto:yingshi@whu.edu.cn)
+- **Institution:** School of Computer Science, Wuhan University, China
 
-Issues: GitHub issue tracker for this repository.
+**Issues:** GitHub issue tracker for this repository.
 
 ---
 
