@@ -14,7 +14,6 @@ TCRCA is a comprehensive approach that combines multiple advanced techniques:
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.9+-ee4c2c.svg)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **[Installation](#installation) · [Datasets](#datasets) · [Metrics](#evaluation-metrics) · [Quick Start](#quick-start) · [Citation](#citation)**
 
