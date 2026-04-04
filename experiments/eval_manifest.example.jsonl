@@ -1,0 +1,1 @@
+{"case_id": "example-1", "trace_id": "REPLACE_WITH_REAL_TRACE_ID", "root_service_id": "REPLACE_WITH_FAULT_SERVICE_NAME", "ground_truth_edges": [["caller_service", "callee_service"]], "is_faulty_trace": true, "trace_anomaly_threshold": 0.0}
